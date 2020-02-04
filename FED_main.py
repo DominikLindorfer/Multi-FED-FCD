@@ -10,7 +10,7 @@ Test-Case is an Ethylene-Benzene Dimer
 
 Function-definitions are given in FED_Functions.py
 """
-import FED_Functions as FED
+import FED_FCD_Functions as FED
 from pyscf import gto
 
 mol = gto.Mole()
