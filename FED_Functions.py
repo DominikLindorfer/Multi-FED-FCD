@@ -89,7 +89,9 @@ def tda_denisty_matrix_dom(td, state_id):
     return dm
 
 def mulliken_pop_dom_transition(mol, dm, s=None):
-
+    '''
+    Calculate Mullikens without substracting the atomic charges
+    '''
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         pop = numpy.einsum('ij,ji->i', dm, s).real
     # else: # ROHF
@@ -153,8 +155,8 @@ def dip_moment_dom(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     return mol_dip
 
 def transition_density_matrix(mf, tdhf, state_id):
-    #Build the (symmetric) transition density matrix (GS -> XS)
     '''
+    Build the (symmetric) transition density matrix (GS -> XS)
     dm_ia = MO_i * MO_a  of molA
     '''
     moA = mf.mo_coeff
@@ -193,7 +195,7 @@ def xs2xs_denisty_matrix_dom(td, state_id1, state_id2):
     dm = np.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
     return dm
 
-def difference_density_matrix(td, state_id1, state_id2):
+def difference_density_matrix(tdhf, state_id1, state_id2):
     '''
     Difference Density Matrix from Herbert J. Chem. Theor. Comp. (2011)
     Calculates the XS-GS density matrix which can be used e.g. for difference charges
