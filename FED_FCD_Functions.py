@@ -63,6 +63,7 @@ def mulliken_pop_dom(mol, dm, s=None):
 
     return pop, chg
 
+
 # from https://github.com/pyscf/pyscf/blob/master/examples/tddft/22-density.py
 #Make Density Matrix for Excited State
 def tda_denisty_matrix_dom(td, state_id):
@@ -180,10 +181,14 @@ def xs2xs_denisty_matrix_dom(td, state_id1, state_id2):
     
     dm_oo =-np.einsum('ia,ka->ik', cis_t1.conj(), cis_t2)
     dm_vv = np.einsum('ia,ic->ac', cis_t1, cis_t2.conj())
-
-    # The ground state density matrix in mo_basis
+    
+    # Create density matrix in mo_basis
     mf = td._scf
-    dm = np.diag(mf.mo_occ)
+    dm = np.diag(np.zeros(cis_t1.shape[0] + cis_t1.shape[1]))
+    # Add the ground state density matrix in mo_basisif states are equal
+    # see Hsu 2014 eq. 46
+    if(state_id1 == state_id2):
+        dm = np.diag(mf.mo_occ)
 
     # Add CIS contribution
     nocc = cis_t1.shape[0]
@@ -194,6 +199,33 @@ def xs2xs_denisty_matrix_dom(td, state_id1, state_id2):
     mo = mf.mo_coeff
     dm = np.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
     return dm
+
+# def xs2xs_denisty_matrix_dom2(tdhf, state_id1, state_id2):
+#     '''
+#     Taking the TDA amplitudes as the CIS coefficients, calculate the XS->XS density
+#     matrix (in AO basis) of the excited states
+#     '''
+#     mf = tdhf._scf
+
+#     cis_t1 = tdhf.xy[state_id1][0]
+#     cis_t2 = tdhf.xy[state_id2][0]
+        
+#     dm_oo = -np.einsum('ia,ka->ik', cis_t1.conj(), cis_t2)
+#     dm_vv = np.einsum('ia,ic->ac', cis_t1, cis_t2.conj())
+    
+#     # Create density matrix in mo_basis
+#     dm = np.diag(np.zeros(cis_t1.shape[0] + cis_t1.shape[1]))
+    
+#     nocc = cis_t1.shape[0]    
+#     # Add CIS contribution for hole and particle density (detachment)
+#     dm[:nocc,:nocc] += dm_oo * 2
+#     dm[nocc:,nocc:] += dm_vv * 2
+    
+#     # Transform density matrices to AO basis
+#     mo = mf.mo_coeff
+#     dm = np.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
+    
+#     return dm
 
 def difference_density_matrix(tdhf, state_id1, state_id2):
     '''
