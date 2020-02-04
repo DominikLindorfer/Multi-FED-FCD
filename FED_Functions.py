@@ -152,7 +152,7 @@ def dip_moment_dom(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     #     log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
     return mol_dip
 
-def transition_density_matrix(mf, tdhf, state_id)
+def transition_density_matrix(mf, tdhf, state_id):
     #Build the (symmetric) transition density matrix (GS -> XS)
     '''
     dm_ia = MO_i * MO_a  of molA
@@ -229,7 +229,7 @@ def difference_density_matrix(td, state_id1, state_id2):
     
     return np.array([dm, dm_gs, diff_dm])
 
-def excitation_denisty_matrix(td, state_id1, state_id2):
+def excitation_denisty_matrix(tdhf, mf, state_id1, state_id2):
     '''
     Excitation Density Matrix from Hsu 2008
     '''

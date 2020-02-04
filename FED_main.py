@@ -55,8 +55,9 @@ tdhf = pyscf.tdscf.rhf.TDA(mf)
 _, xy1 = tdhf.kernel(nstates=nstates)
 tdhf.analyze()
 
+import numpy as np
 
-def FED_Couplings(tdhf, s0_max, s1_max):
+def FED_Couplings(tdhf, mf, s0_max, s1_max):
     s = mf.get_ovlp()
     STS_D = 6
     
@@ -68,8 +69,8 @@ def FED_Couplings(tdhf, s0_max, s1_max):
         for s1 in range(s1_max):
             
             #XS States & Populations for Donor & Acceptor
-            dm_s1 = FED.excitation_denisty_matrix(tdhf, s0, s0)
-            dm_s2 = FED.excitation_denisty_matrix(tdhf, s1, s1)
+            dm_s1 = FED.excitation_denisty_matrix(tdhf, mf, s0, s0)
+            dm_s2 = FED.excitation_denisty_matrix(tdhf, mf, s1, s1)
             
             mulliken_hole_s1 = FED.mulliken_pop_dom_transition(mol, dm_s1[0], s)
             mulliken_part_s1 = FED.mulliken_pop_dom_transition(mol, dm_s1[1], s)
@@ -91,8 +92,8 @@ def FED_Couplings(tdhf, s0_max, s1_max):
             dx22 = np.sum(s2_D_hole) + np.sum(s2_D_part) - (np.sum(s2_A_hole)+np.sum(s2_A_part))
             
             #XS -> XS Excitation Matrix
-            dm_s12 = FED.excitation_denisty_matrix(tdhf, s0, s1)
-            dm_s21 = FED.excitation_denisty_matrix(tdhf, s1, s0)
+            dm_s12 = FED.excitation_denisty_matrix(tdhf, mf, s0, s1)
+            dm_s21 = FED.excitation_denisty_matrix(tdhf, mf, s1, s0)
             
             dms_12 = (dm_s12 + dm_s21) / 2
             
@@ -113,9 +114,7 @@ def FED_Couplings(tdhf, s0_max, s1_max):
             if(s1 > s0):
                 print(s0+1, "  ", s1+1, "  ", fed, "  ", dx12, "  ", dx11, "  ", dx22)
 
-FED_Couplings(tdhf, 10,10)
-
-
+FED_Couplings(tdhf, mf, 10,10)
 
 
 
@@ -123,7 +122,6 @@ FED_Couplings(tdhf, 10,10)
 Tests for individual parts of the FED Calculations
 This can be used to compare to QChem Results
 '''
-import numpy as np
 from pyscf.lib import logger
 
 #GS-Mullikens
