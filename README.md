@@ -1,5 +1,5 @@
 # Multi-FED-FCD
-Implementation of the Finite-Excitation-Difference (FED), Finite-Charge-Difference (FCD) and the Multi-FED-FCD Scheme using the Open-Source Quantum-Chemistry Framework PySCF
+Implementation of the Fragment-Excitation-Difference (FED), Fragment-Charge-Difference (FCD) and the Multi-FED-FCD Scheme using the Open-Source Quantum-Chemistry Framework PySCF
 
 ## This is a work-in-progress project!
 
