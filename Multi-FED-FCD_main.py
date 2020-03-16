@@ -242,3 +242,45 @@ Dmat = np.dot(qmatFCD, qmatFCD) - np.dot(qmat, qmat)
 a = np.dot( np.dot(np.transpose(evecs), Dmat), evecs)
 a[np.abs(a) < 0.01] = 0
 
+DqDbasis = np.dot( np.dot(np.transpose(evecs), qmatFCD), evecs)
+DxDbasis = np.dot( np.dot(np.transpose(evecs), qmat), evecs)
+
+DxDbasis_LE = DxDbasis[2:10, 2:10]
+(evals_LE, evecs_LE) = np.linalg.eig(DxDbasis_LE)
+
+DqDbasis_CT = DqDbasis[0:2, 0:2]
+(evals_CT, evecs_CT) = np.linalg.eig(DqDbasis_CT)
+
+
+U2 = np.zeros((s0_max, s1_max))
+
+# U2[0:2, 0:2] = np.transpose(evecs_CT)
+# U2[2:10, 2:10] = np.transpose(evecs_LE)
+U2[0:2, 0:2] = evecs_CT
+U2[2:10, 2:10] = evecs_LE
+
+DxFinal = np.dot( np.dot(np.transpose(U2), DxDbasis), U2)
+DqFinal = np.dot( np.dot(np.transpose(U2), DqDbasis), U2)
+
+
+DqFinal[np.abs(DqFinal) < 1e-10] = 0
+
+a = DxFinal[np.abs(DxFinal) < 1e-10] = 0
+
+np.sort(np.diag(DxFinal))
+np.sort(np.diag(DqFinal))
+
+
+DqDiag = np.diag(DqDbasis)
+DqDiag_size = DqDiag.size
+DqDiag = np.transpose(np.vstack((DqDiag, np.arange(DqDiag.size, dtype=int))))
+
+index_mapping = DqDiag[np.argsort(DqDiag[:, 0])]
+DqDiag_Restructured = np.zeros((DqDiag_size, DqDiag_size))
+
+for i in range(DqDiag_size):
+    DqDiag_Restructured[i, i] = index_mapping[i, 0]
+    
+Hinit = np.zeros((10, 10))
+Hinit = np.fill_diagonal(Hinit, tdhf.e / 0.0367493 * 8065.5 )
+
