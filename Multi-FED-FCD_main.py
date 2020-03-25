@@ -50,7 +50,6 @@ from pyscf import gto, scf, dft, tddft
 import pyscf.tdscf
 mf = scf.RHF(mol)
 mf.kernel()
-
 tdhf = pyscf.tdscf.rhf.TDA(mf)
 _, xy1 = tdhf.kernel(nstates=nstates)
 tdhf.analyze()
@@ -235,52 +234,138 @@ np.savetxt("qmatFCD.txt", qmatFCD)
 qmat = qmat / 2
 qmatFCD = -qmatFCD / 2
 
+#-----Build D Matrix-----
 Dmat = np.dot(qmatFCD, qmatFCD) - np.dot(qmat, qmat)
+(Devals, Devecs) = np.linalg.eig(Dmat)
 
-(evals, evecs) = np.linalg.eig(Dmat)
+#-----Divide into CT / LE Subspaces-----
+CT_subspace = np.array([])
+LE_subspace = np.array([])
 
-a = np.dot( np.dot(np.transpose(evecs), Dmat), evecs)
-a[np.abs(a) < 0.01] = 0
+for i in range(Devals.size):
+    if(Devals[i] < 0):
+        LE_subspace = np.append(LE_subspace, i)
+    if(Devals[i] > 0):
+        CT_subspace = np.append(CT_subspace, i)
 
-DqDbasis = np.dot( np.dot(np.transpose(evecs), qmatFCD), evecs)
-DxDbasis = np.dot( np.dot(np.transpose(evecs), qmat), evecs)
+# a = np.dot( np.dot(np.transpose(evecs), Dmat), evecs)
+# a[np.abs(a) < 0.01] = 0
 
-DxDbasis_LE = DxDbasis[2:10, 2:10]
+#-----Transform Dx and Dq to D-Basis-----
+DxDbasis = np.dot( np.dot(np.transpose(Devecs), qmat), Devecs)
+DqDbasis = np.dot( np.dot(np.transpose(Devecs), qmatFCD), Devecs)
+
+# mat = np.arange(16).reshape(4,4)
+# print(mat)
+# ind = np.array([0,2,3,1])
+# mat[ind,:][:,ind]
+
+# ind2 = np.array([0,2])
+# ind3 = np.array([3,1])
+
+# mat[ind2,:][:,ind2]
+# mat[ind3,:][:,ind3]
+
+DxDbasis_LE = DxDbasis[LE_subspace.astype(int),:][:,LE_subspace.astype(int)]
 (evals_LE, evecs_LE) = np.linalg.eig(DxDbasis_LE)
 
-DqDbasis_CT = DqDbasis[0:2, 0:2]
+DqDbasis_CT = DqDbasis[CT_subspace.astype(int),:][:,CT_subspace.astype(int)]
 (evals_CT, evecs_CT) = np.linalg.eig(DqDbasis_CT)
 
+# DxDbasis_LE1 = DxDbasis[2:10, 2:10]
+# (evals_LE, evecs_LE) = np.linalg.eig(DxDbasis_LE)
 
-U2 = np.zeros((s0_max, s1_max))
-
+# DqDbasis_CT1 = DqDbasis[0:2, 0:2]
+# (evals_CT, evecs_CT) = np.linalg.eig(DqDbasis_CT)
 # U2[0:2, 0:2] = np.transpose(evecs_CT)
 # U2[2:10, 2:10] = np.transpose(evecs_LE)
-U2[0:2, 0:2] = evecs_CT
-U2[2:10, 2:10] = evecs_LE
+
+U2 = np.zeros((s0_max, s1_max))
+U2[0:evecs_CT.shape[0], 0:evecs_CT.shape[0]] = evecs_CT
+U2[evecs_CT.shape[0]:s0_max, evecs_CT.shape[0]:s0_max] = evecs_LE
 
 DxFinal = np.dot( np.dot(np.transpose(U2), DxDbasis), U2)
 DqFinal = np.dot( np.dot(np.transpose(U2), DqDbasis), U2)
 
+#-----Divide CT Subspace into A-B+ (AmBp) and A+B- (ApBm)-----
+CT_subspace_CT1 = np.array([])
+CT_subspace_CT2 = np.array([])
 
-DqFinal[np.abs(DqFinal) < 1e-10] = 0
+for i in range(CT_subspace.size):
+    if(DqFinal[i,i] < 0):
+        CT_subspace_CT2 = np.append(CT_subspace_CT2, i)
+    if(DqFinal[i,i] > 0):
+        CT_subspace_CT1 = np.append(CT_subspace_CT1, i)
 
-a = DxFinal[np.abs(DxFinal) < 1e-10] = 0
+#-----Divide LE Subspace into A*B (AsB) and AB* (ABs)-----
+LE_subspace_LE1 = np.array([])
+LE_subspace_LE2 = np.array([])
+CT_size = evecs_CT.shape[0]
 
-np.sort(np.diag(DxFinal))
-np.sort(np.diag(DqFinal))
+for i in range(LE_subspace.size):
+    if(DxFinal[CT_size + i, CT_size + i] < 0):
+        LE_subspace_LE2 = np.append(LE_subspace_LE2, CT_size + i)
+    if(DxFinal[CT_size + i, CT_size + i] > 0):
+        LE_subspace_LE1 = np.append(LE_subspace_LE1, CT_size + i)
+
+#-----Order Matrix into Submatrices as in the SI of Cupellini 2018: LE1 LE2 CT1 CT2-----
+Dmat_order = np.concatenate((CT_subspace_CT1, CT_subspace_CT2 , LE_subspace_LE1, LE_subspace_LE2))
 
 
-DqDiag = np.diag(DqDbasis)
-DqDiag_size = DqDiag.size
-DqDiag = np.transpose(np.vstack((DqDiag, np.arange(DqDiag.size, dtype=int))))
+#-----Initial Hamiltonian-----
+H_init = np.zeros((tdhf.e.shape[0], tdhf.e.shape[0]))
+np.fill_diagonal(H_init, tdhf.e / 0.0367493 * 8065.5)
 
-index_mapping = DqDiag[np.argsort(DqDiag[:, 0])]
-DqDiag_Restructured = np.zeros((DqDiag_size, DqDiag_size))
+#-----Hamiltonian in D-Basis-----
+H_Dbasis = np.dot( np.dot(np.transpose(Devecs), H_init), Devecs)
+# H_Dbasis[np.abs(H_Dbasis) < 1e-5] = 0
 
-for i in range(DqDiag_size):
-    DqDiag_Restructured[i, i] = index_mapping[i, 0]
+#-----Restructure Hamiltonian into LE / CT Subspaces-----
+Dmat_order_CTLE = np.concatenate((CT_subspace, LE_subspace))
+H_Dbasis_CTLE = H_Dbasis[Dmat_order_CTLE.astype(int),:][:,Dmat_order_CTLE.astype(int)]
+
+H_U1U2 = np.dot( np.dot(np.transpose(U2), H_Dbasis_CTLE), U2)
+
+#-----Restructure Hamiltonian into LE1, LE2 / CT1, CT2 Subspaces-----
+H_final = H_U1U2[Dmat_order.astype(int),:][:,Dmat_order.astype(int)]
+#H_final[np.abs(H_final) < 1e-3] = 0
+
+#-----Diagonalize Subspaces in the Hamiltonian to finally de-couple states-----
+CT1_size = CT_subspace_CT1.shape[0]
+CT2_size = CT_subspace_CT2.shape[0]
+LE1_size = LE_subspace_LE1.shape[0]
+LE2_size = LE_subspace_LE2.shape[0]
+
+
+
+
+
+
+
+#-----Output Energies & the Couplings between Subspaces-----
+
+
+
+
+
+
+# DqFinal[np.abs(DqFinal) < 1e-10] = 0
+
+# a = DxFinal[np.abs(DxFinal) < 1e-10] = 0
+
+# np.sort(np.diag(DxFinal))
+# np.sort(np.diag(DqFinal))
+
+
+# DqDiag = np.diag(DqDbasis)
+# DqDiag_size = DqDiag.size
+# DqDiag = np.transpose(np.vstack((DqDiag, np.arange(DqDiag.size, dtype=int))))
+
+# index_mapping = DqDiag[np.argsort(DqDiag[:, 0])]
+# DqDiag_Restructured = np.zeros((DqDiag_size, DqDiag_size))
+
+# for i in range(DqDiag_size):
+#     DqDiag_Restructured[i, i] = index_mapping[i, 0]
     
-Hinit = np.zeros((10, 10))
-Hinit = np.fill_diagonal(Hinit, tdhf.e / 0.0367493 * 8065.5 )
+
 
