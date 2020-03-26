@@ -152,8 +152,8 @@ def FED_Couplings(tdhf, mf, s0_max, s1_max):
             if(s1 > s0):
                 print(s0+1, "  ", s1+1, "  ", fed, "  ", dx12, "  ", dx11, "  ", dx22)
 
-FED_Couplings(tdhf, mf, nstates, nstates)
-FCD_Couplings(tdhf, mf, nstates, nstates)
+# FED_Couplings(tdhf, mf, nstates, nstates)
+# FCD_Couplings(tdhf, mf, nstates, nstates)
 
 #-----Build Matrices-----
 
@@ -202,7 +202,7 @@ for s0 in range(s0_max):
             
             qmat[s0, s1] = dx12
 
-np.savetxt("qmat.txt", qmat)
+# np.savetxt("qmat.txt", qmat)
 
 #-----Build Dq Matrix-----
 qmatFCD = np.zeros((s0_max, s1_max))
@@ -227,9 +227,9 @@ for s0 in range(s0_max):
             chg01 = FED.mulliken_pop_dom_transition(mol, dmxs2xs_symm, s)[1]
             dqs0s1 = np.sum(chg01[:STS_D])-np.sum(chg01[STS_D:])
             
-            qmatFCD[s0, s1] = dqs0s1
+            qmatFCD[s0, s1] = -dqs0s1
             
-np.savetxt("qmatFCD.txt", qmatFCD)
+# np.savetxt("qmatFCD.txt", qmatFCD)
 
 qmat = qmat / 2
 qmatFCD = -qmatFCD / 2
@@ -237,6 +237,9 @@ qmatFCD = -qmatFCD / 2
 #-----Build D Matrix-----
 Dmat = np.dot(qmatFCD, qmatFCD) - np.dot(qmat, qmat)
 (Devals, Devecs) = np.linalg.eig(Dmat)
+
+# np.set_printoptions(precision = 15, suppress=True)
+# print(repr(Dmat))
 
 #-----Divide into CT / LE Subspaces-----
 CT_subspace = np.array([])
@@ -248,23 +251,10 @@ for i in range(Devals.size):
     if(Devals[i] > 0):
         CT_subspace = np.append(CT_subspace, i)
 
-# a = np.dot( np.dot(np.transpose(evecs), Dmat), evecs)
-# a[np.abs(a) < 0.01] = 0
-
 #-----Transform Dx and Dq to D-Basis-----
 DxDbasis = np.dot( np.dot(np.transpose(Devecs), qmat), Devecs)
 DqDbasis = np.dot( np.dot(np.transpose(Devecs), qmatFCD), Devecs)
 
-# mat = np.arange(16).reshape(4,4)
-# print(mat)
-# ind = np.array([0,2,3,1])
-# mat[ind,:][:,ind]
-
-# ind2 = np.array([0,2])
-# ind3 = np.array([3,1])
-
-# mat[ind2,:][:,ind2]
-# mat[ind3,:][:,ind3]
 
 DxDbasis_LE = DxDbasis[LE_subspace.astype(int),:][:,LE_subspace.astype(int)]
 (evals_LE, evecs_LE) = np.linalg.eig(DxDbasis_LE)
@@ -324,30 +314,93 @@ H_Dbasis = np.dot( np.dot(np.transpose(Devecs), H_init), Devecs)
 Dmat_order_CTLE = np.concatenate((CT_subspace, LE_subspace))
 H_Dbasis_CTLE = H_Dbasis[Dmat_order_CTLE.astype(int),:][:,Dmat_order_CTLE.astype(int)]
 
-H_U1U2 = np.dot( np.dot(np.transpose(U2), H_Dbasis_CTLE), U2)
+H_final = np.dot( np.dot(np.transpose(U2), H_Dbasis_CTLE), U2)
 
 #-----Restructure Hamiltonian into LE1, LE2 / CT1, CT2 Subspaces-----
-H_final = H_U1U2[Dmat_order.astype(int),:][:,Dmat_order.astype(int)]
+H_final = H_final[Dmat_order.astype(int),:][:,Dmat_order.astype(int)]
 #H_final[np.abs(H_final) < 1e-3] = 0
+# print(H_final)
 
 #-----Diagonalize Subspaces in the Hamiltonian to finally de-couple states-----
-CT1_size = CT_subspace_CT1.shape[0]
-CT2_size = CT_subspace_CT2.shape[0]
-LE1_size = LE_subspace_LE1.shape[0]
-LE2_size = LE_subspace_LE2.shape[0]
+CT1_order = np.arange(0, CT_subspace_CT1.shape[0])
+CT2_order = np.arange(CT_subspace_CT1.shape[0], CT_subspace_CT1.shape[0] + CT_subspace_CT2.shape[0])
+LE1_order = np.arange(CT_subspace_CT1.shape[0] + CT_subspace_CT2.shape[0], CT_subspace_CT1.shape[0] + CT_subspace_CT2.shape[0] + LE_subspace_LE1.shape[0])
+LE2_order = np.arange(CT_subspace_CT1.shape[0] + CT_subspace_CT2.shape[0] + LE_subspace_LE1.shape[0] , CT_subspace_CT1.shape[0] + CT_subspace_CT2.shape[0] + LE_subspace_LE1.shape[0] + LE_subspace_LE2.shape[0])
 
 
+CT1_subspace = H_final[CT1_order,:][:,CT1_order]
+(evals_CT1, evecs_CT1) = np.linalg.eig(CT1_subspace)
+
+CT2_subspace = H_final[CT2_order,:][:,CT2_order]
+(evals_CT2, evecs_CT2) = np.linalg.eig(CT2_subspace)
+
+LE1_subspace = H_final[LE1_order,:][:,LE1_order]
+(evals_LE1, evecs_LE1) = np.linalg.eig(LE1_subspace)
+
+LE2_subspace = H_final[LE2_order,:][:,LE2_order]
+(evals_LE2, evecs_LE2) = np.linalg.eig(LE2_subspace)
+
+#-----Build U3-----
+U3 = np.zeros((s0_max, s1_max))
+CT1_size = CT1_subspace.shape[0]
+CT2_size = CT2_subspace.shape[0]
+LE1_size = LE1_subspace.shape[0]
+LE2_size = LE2_subspace.shape[0]
+
+U3[0:CT1_size, 0:CT1_size] = evecs_CT1
+
+U3[CT1_size:CT1_size + CT2_size,
+   CT1_size:CT1_size + CT2_size] = evecs_CT2
+
+U3[CT1_size + CT2_size:CT1_size + CT2_size + LE1_size,
+   CT1_size + CT2_size:CT1_size + CT2_size + LE1_size] = evecs_LE1
+
+U3[CT1_size + CT2_size + LE1_size:CT1_size + CT2_size + LE1_size + LE2_size,
+   CT1_size + CT2_size + LE1_size:CT1_size + CT2_size + LE1_size + LE2_size] = evecs_LE2
 
 
-
-
+#-----Diagonalize Submatrixes in Hfinal-----
+H_final = np.dot( np.dot(np.transpose(U3), H_final), U3)
+H_final[np.abs(H_final) < 1e-3] = 0
 
 #-----Output Energies & the Couplings between Subspaces-----
+print(H_final)
+
+#-----CT1-Couplings-----
+#CT1 - CT2
+H_final[:CT1_size, CT1_size: CT1_size + CT2_size]
+#CT1 - LE1
+H_final[:CT1_size, CT1_size + CT2_size: CT1_size + CT2_size + LE1_size]
+#CT1 - LE2
+H_final[:CT1_size, CT1_size + CT2_size + LE1_size: CT1_size + CT2_size + LE1_size + LE2_size]
+
+#-----CT2-Couplings-----
+#CT2 - LE1
+H_final[CT1_size: CT1_size + CT2_size, CT1_size + CT2_size: CT1_size + CT2_size + LE1_size]
+#CT2 - LE2
+H_final[CT1_size: CT1_size + CT2_size, CT1_size + CT2_size + LE1_size: CT1_size + CT2_size + LE1_size + LE2_size]
+
+#-----LE1-LE2-Couplings-----
+H_final[CT1_size + CT2_size: CT1_size + CT2_size + LE1_size, CT1_size + CT2_size + LE1_size: CT1_size + CT2_size + LE1_size + LE2_size]
 
 
+# mat = np.arange(64).reshape(8,8)
+# mat
+# mat[0:3,2:]
+# mat[3:5,2:]
+# #CT1 - CT2
+# H_final[CT1_size:CT1_size + CT1_size, :CT1_size]
+# # H_final[CT2_size:CT2_size + LE1_size, :CT2_size]
+# #CT2 - LE1
+# H_final[CT1_size + CT2_size:CT2_size + LE1_size, :CT2_size]
 
+# #CT2 - LE2
+# H_final[CT2_size + LE1_size:CT2_size + LE1_size + LE2_size, :CT2_size]
 
-
+# #LE1 - LE2
+# H_final[CT2_size + LE1_size:CT2_size + LE1_size + LE2_size, CT2_size: CT2_size+LE1_size]
+# H_final[4:,:2]
+# H_final[2:,:2]
 
 # DqFinal[np.abs(DqFinal) < 1e-10] = 0
 
@@ -366,6 +419,15 @@ LE2_size = LE_subspace_LE2.shape[0]
 
 # for i in range(DqDiag_size):
 #     DqDiag_Restructured[i, i] = index_mapping[i, 0]
-    
+# mat = np.arange(16).reshape(4,4)
+# print(mat)
+# ind = np.array([0,2,3,1])
+# mat[ind,:][:,ind]
+
+# ind2 = np.array([0,2])
+# ind3 = np.array([3,1])
+
+# mat[ind2,:][:,ind2]
+# mat[ind3,:][:,ind3]
 
 
