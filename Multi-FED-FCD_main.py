@@ -14,7 +14,6 @@ import FED_FCD_Functions as FED
 from pyscf import gto
 
 mol = gto.Mole()
-
 mol.atom = '''C     0.670518    0.000000    0.000000;
    H     1.241372    0.927754    0.000000;
    H     1.241372   -0.927754    0.000000;
@@ -42,9 +41,7 @@ mol.symmetry = False
 nstates = 10
 mol.build(dump_input=False, parse_arg=False)
 
-#######################
-#HF-CIS Part with PySCF
-#######################
+#-----HF-CIS Part with PySCF-----
 import pyscf
 from pyscf import gto, scf, dft, tddft
 import pyscf.tdscf
@@ -56,6 +53,7 @@ tdhf.analyze()
 
 import numpy as np
 
+#-----FCD and FED Couplings-----
 def FCD_Couplings(tdhf, mf, s0_max, s1_max):
     s = mf.get_ovlp()
     STS_D = 6
@@ -155,8 +153,8 @@ def FED_Couplings(tdhf, mf, s0_max, s1_max):
 # FED_Couplings(tdhf, mf, nstates, nstates)
 # FCD_Couplings(tdhf, mf, nstates, nstates)
 
+#-----Start of Multi-FED-FCD Scheme-----
 #-----Build Matrices-----
-
 s = mf.get_ovlp()
 STS_D = 6
 
@@ -262,14 +260,7 @@ DxDbasis_LE = DxDbasis[LE_subspace.astype(int),:][:,LE_subspace.astype(int)]
 DqDbasis_CT = DqDbasis[CT_subspace.astype(int),:][:,CT_subspace.astype(int)]
 (evals_CT, evecs_CT) = np.linalg.eig(DqDbasis_CT)
 
-# DxDbasis_LE1 = DxDbasis[2:10, 2:10]
-# (evals_LE, evecs_LE) = np.linalg.eig(DxDbasis_LE)
-
-# DqDbasis_CT1 = DqDbasis[0:2, 0:2]
-# (evals_CT, evecs_CT) = np.linalg.eig(DqDbasis_CT)
-# U2[0:2, 0:2] = np.transpose(evecs_CT)
-# U2[2:10, 2:10] = np.transpose(evecs_LE)
-
+#-----Build U2-----
 U2 = np.zeros((s0_max, s1_max))
 U2[0:evecs_CT.shape[0], 0:evecs_CT.shape[0]] = evecs_CT
 U2[evecs_CT.shape[0]:s0_max, evecs_CT.shape[0]:s0_max] = evecs_LE
@@ -300,7 +291,6 @@ for i in range(LE_subspace.size):
 
 #-----Order Matrix into Submatrices as in the SI of Cupellini 2018: LE1 LE2 CT1 CT2-----
 Dmat_order = np.concatenate((CT_subspace_CT1, CT_subspace_CT2 , LE_subspace_LE1, LE_subspace_LE2))
-
 
 #-----Initial Hamiltonian-----
 H_init = np.zeros((tdhf.e.shape[0], tdhf.e.shape[0]))
@@ -365,6 +355,8 @@ H_final[np.abs(H_final) < 1e-3] = 0
 
 #-----Output Energies & the Couplings between Subspaces-----
 print(H_final)
+print("Submatrix Sizes:\n")
+print("CT1_Size: ", CT1_size, "\nCT2_Size: ", CT2_size,"\nLE1_Size: ", LE1_size,"\nLE2_Size: ", LE2_size,)
 
 #-----CT1-Couplings-----
 #CT1 - CT2
