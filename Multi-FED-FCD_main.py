@@ -46,10 +46,14 @@ import pyscf
 from pyscf import gto, scf, dft, tddft
 import pyscf.tdscf
 mf = scf.RHF(mol)
+# mf.chkfile = 'Ethylene_Benzene.chk'
+# pyscf.scf.rhf.init_guess_by_chkfile(mol, mf.chkfile)
+
 mf.kernel()
 tdhf = pyscf.tdscf.rhf.TDA(mf)
 _, xy1 = tdhf.kernel(nstates=nstates)
 tdhf.analyze()
+# mf.get_init_guess(mol, mf.chkfile)
 
 import numpy as np
 
@@ -65,20 +69,20 @@ def FCD_Couplings(tdhf, mf, s0_max, s1_max):
     for s0 in range(s0_max):
         for s1 in range(s1_max):
     
-            dmxs0 = FED.xs2xs_denisty_matrix_dom(tdhf, s0, s0)
+            dmxs0 = FED.xs2xs_density_matrix_dom(tdhf, s0, s0)
             chg0 = FED.mulliken_pop_dom(mol, dmxs0, s)[1]
             
             dqs0 = np.sum(chg0[:STS_D])-np.sum(chg0[STS_D:])
             
             
-            dmxs1 = FED.xs2xs_denisty_matrix_dom(tdhf, s1, s1)
+            dmxs1 = FED.xs2xs_density_matrix_dom(tdhf, s1, s1)
             chg1 = FED.mulliken_pop_dom(mol, dmxs1, s)[1]
             
             dqs1 = np.sum(chg1[:STS_D])-np.sum(chg1[STS_D:])
             
             
-            dmxs2xs05 = FED.xs2xs_denisty_matrix_dom(tdhf, s0, s1)
-            dmxs2xs50 = FED.xs2xs_denisty_matrix_dom(tdhf, s1, s0)
+            dmxs2xs05 = FED.xs2xs_density_matrix_dom(tdhf, s0, s1)
+            dmxs2xs50 = FED.xs2xs_density_matrix_dom(tdhf, s1, s0)
             dmxs2xs_symm = (dmxs2xs05 + dmxs2xs50) / 2
             
             chg01 = FED.mulliken_pop_dom_transition(mol, dmxs2xs_symm, s)[1]
@@ -151,7 +155,30 @@ def FED_Couplings(tdhf, mf, s0_max, s1_max):
                 print(s0+1, "  ", s1+1, "  ", fed, "  ", dx12, "  ", dx11, "  ", dx22)
 
 # FED_Couplings(tdhf, mf, nstates, nstates)
-# FCD_Couplings(tdhf, mf, nstates, nstates)
+FCD_Couplings(tdhf, mf, nstates, nstates)
+
+
+
+# # FED Coupling Vorzeichen ist anders aufgrund der xs2xs_density matrix welche bis auf ein VZ bestimmt ist
+# # Selbes "Problem" wie in normalen 0->XS transition dipole -> VZ vom FED / FCD Coupling sind dann genauso
+# # mit dem selben VZ zu behandeln
+# tdhf.analyze()
+# tdhf.transition_dipole()
+# dmxs2xs = FED.xs2xs_denisty_matrix_dom(tdhf, 0, 0)
+# dip_xs2xs = FED.dip_moment_dom(mol, dmxs2xs)
+# mf.dip_moment(mol, dmxs2xs, unit='A.U.')
+
+# dmxs2xs = FED.xs2xs_denisty_matrix_dom(tdhf, 0, 0)
+# mullikens = mf.mulliken_pop()
+# s = mf.get_ovlp()
+
+# chg0 = FED.mulliken_pop_dom(mol, dmxs2xs, s)[1]
+# dqs0 = np.sum(chg0[:6])-np.sum(chg0[6:])
+
+# gs_contrib = np.sum(mullikens[1][:6]) - np.sum(mullikens[1][6:])
+# dqs0 - gs_contrib
+
+# rdm_1 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
 
 #-----Start of Multi-FED-FCD Scheme-----
 #-----Build Matrices-----
@@ -210,29 +237,33 @@ for s0 in range(s0_max):
     for s1 in range(s1_max):
         
         if(s0 == s1):
-            dmxs0 = FED.xs2xs_denisty_matrix_dom(tdhf, s0, s0)
-            chg0 = FED.mulliken_pop_dom(mol, dmxs0, s)[1]
+            # dmxs0 = FED.xs2xs_denisty_matrix_dom(tdhf, s0, s0)
+            # chg0 = FED.mulliken_pop_dom(mol, dmxs0, s)[1]
+            dmxs0 = FED.xs2xs_density_matrix_dom_noGS(tdhf, s0, s0)
+            chg0 = FED.mulliken_pop_dom_transition(mol, dmxs0, s)[1]
             dqs0 = np.sum(chg0[:STS_D])-np.sum(chg0[STS_D:])
             
             gs_contrib = np.sum(mullikens[1][:STS_D]) - np.sum(mullikens[1][STS_D:])
-            qmatFCD[s0, s1] = dqs0 - gs_contrib
+            # qmatFCD[s0, s1] = dqs0 - gs_contrib
+            qmatFCD[s0, s1] = dqs0
             
         else:
-            dmxs2xs05 = FED.xs2xs_denisty_matrix_dom(tdhf, s0, s1)
-            dmxs2xs50 = FED.xs2xs_denisty_matrix_dom(tdhf, s1, s0)
+            dmxs2xs05 = FED.xs2xs_density_matrix_dom(tdhf, s0, s1)
+            dmxs2xs50 = FED.xs2xs_density_matrix_dom(tdhf, s1, s0)
             dmxs2xs_symm = (dmxs2xs05 + dmxs2xs50) / 2
         
             chg01 = FED.mulliken_pop_dom_transition(mol, dmxs2xs_symm, s)[1]
             dqs0s1 = np.sum(chg01[:STS_D])-np.sum(chg01[STS_D:])
             
-            qmatFCD[s0, s1] = -dqs0s1
+            qmatFCD[s0, s1] = dqs0s1
             
 # np.savetxt("qmatFCD.txt", qmatFCD)
 
+#-----Following & Converting to the same Definitions of Notolli et.al. 2018-----
 qmat = qmat / 2
-qmatFCD = -qmatFCD / 2
+qmatFCD = qmatFCD / 2
 
-#-----Build D Matrix-----
+#-----Build D Matrix and U1 Transformation (Devals, Devecs)-----
 Dmat = np.dot(qmatFCD, qmatFCD) - np.dot(qmat, qmat)
 (Devals, Devecs) = np.linalg.eig(Dmat)
 
@@ -253,6 +284,8 @@ for i in range(Devals.size):
 DxDbasis = np.dot( np.dot(np.transpose(Devecs), qmat), Devecs)
 DqDbasis = np.dot( np.dot(np.transpose(Devecs), qmatFCD), Devecs)
 
+# np.savetxt("DxDbasis.txt", DxDbasis)
+# np.savetxt("DqDbasis.txt", DqDbasis)
 
 DxDbasis_LE = DxDbasis[LE_subspace.astype(int),:][:,LE_subspace.astype(int)]
 (evals_LE, evecs_LE) = np.linalg.eig(DxDbasis_LE)
@@ -296,7 +329,7 @@ Dmat_order = np.concatenate((CT_subspace_CT1, CT_subspace_CT2 , LE_subspace_LE1,
 H_init = np.zeros((tdhf.e.shape[0], tdhf.e.shape[0]))
 np.fill_diagonal(H_init, tdhf.e / 0.0367493 * 8065.5)
 
-#-----Hamiltonian in D-Basis-----
+#-----Hamiltonian in D-Basis by using U1 (Devals, Devecs)-----
 H_Dbasis = np.dot( np.dot(np.transpose(Devecs), H_init), Devecs)
 # H_Dbasis[np.abs(H_Dbasis) < 1e-5] = 0
 
@@ -355,6 +388,8 @@ H_final[np.abs(H_final) < 1e-3] = 0
 
 #-----Output Energies & the Couplings between Subspaces-----
 print(H_final)
+np.savetxt("H_final_PySCF.txt", H_final)
+
 print("Submatrix Sizes:\n")
 print("CT1_Size: ", CT1_size, "\nCT2_Size: ", CT2_size,"\nLE1_Size: ", LE1_size,"\nLE2_Size: ", LE2_size,)
 
@@ -374,6 +409,23 @@ H_final[CT1_size: CT1_size + CT2_size, CT1_size + CT2_size + LE1_size: CT1_size 
 
 #-----LE1-LE2-Couplings-----
 H_final[CT1_size + CT2_size: CT1_size + CT2_size + LE1_size, CT1_size + CT2_size + LE1_size: CT1_size + CT2_size + LE1_size + LE2_size]
+
+
+#-----Coefficient Matrix-----
+#-----Initial Hamiltonian-----
+H_coeff = np.identity(tdhf.e.shape[0])
+
+#-----Hamiltonian in D-Basis by using U1 (Devals, Devecs)-----
+#H_coeffDbasis = np.dot(H_coeff , Devecs)
+H_coeffDbasis = np.dot(np.transpose(Devecs), H_coeff)
+
+#-----Restructure Hamiltonian into LE / CT Subspaces-----
+Dmatcoeff_order_CTLE = np.concatenate((CT_subspace, LE_subspace))
+H_coeffDbasis_CTLE = H_coeffDbasis[Dmat_order_CTLE.astype(int),:][:,Dmat_order_CTLE.astype(int)]
+
+#Hcoeff_final = np.dot(H_coeffDbasis_CTLE, U2)
+Hcoeff_final = np.dot(np.transpose(U2), H_coeffDbasis_CTLE)
+Hcoeff_final = np.dot(np.transpose(U3), Hcoeff_final)
 
 
 # mat = np.arange(64).reshape(8,8)
@@ -421,5 +473,4 @@ H_final[CT1_size + CT2_size: CT1_size + CT2_size + LE1_size, CT1_size + CT2_size
 
 # mat[ind2,:][:,ind2]
 # mat[ind3,:][:,ind3]
-
 

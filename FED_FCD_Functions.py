@@ -15,6 +15,7 @@ import pyscf.tdscf
 from pyscf.lib import logger
 import numpy as np
 import numpy
+from numba import jit
 
 # from https://sunqm.github.io/pyscf/_modules/pyscf/scf/hf.html#SCF.make_rdm1
 # From Documentation: full density matrix for RHF
@@ -171,7 +172,7 @@ def transition_density_matrix(mf, tdhf, state_id):
     
     return dm_ia_symm
 
-def xs2xs_denisty_matrix_dom(td, state_id1, state_id2):
+def xs2xs_density_matrix_dom(td, state_id1, state_id2):
     '''
     Taking the TDA amplitudes as the CIS coefficients, calculate the XS->XS density
     matrix (in AO basis) of the excited states
@@ -185,7 +186,7 @@ def xs2xs_denisty_matrix_dom(td, state_id1, state_id2):
     # Create density matrix in mo_basis
     mf = td._scf
     dm = np.diag(np.zeros(cis_t1.shape[0] + cis_t1.shape[1]))
-    # Add the ground state density matrix in mo_basisif states are equal
+    # Add the ground state density matrix in mo_basis if states are equal
     # see Hsu 2014 eq. 46
     if(state_id1 == state_id2):
         dm = np.diag(mf.mo_occ)
@@ -199,6 +200,46 @@ def xs2xs_denisty_matrix_dom(td, state_id1, state_id2):
     mo = mf.mo_coeff
     dm = np.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
     return dm
+
+def xs2xs_density_matrix_dom_noGS(td, state_id1, state_id2):
+    '''
+    Taking the TDA amplitudes as the CIS coefficients, calculate the XS->XS density
+    matrix (in AO basis) of the excited states
+    '''
+    cis_t1 = td.xy[state_id1][0]
+    cis_t2 = td.xy[state_id2][0]
+    
+    dm_oo =-np.einsum('ia,ka->ik', cis_t1.conj(), cis_t2)
+    dm_vv = np.einsum('ia,ic->ac', cis_t1, cis_t2.conj())
+    
+    # Create density matrix in mo_basis
+    mf = td._scf
+    dm = np.diag(np.zeros(cis_t1.shape[0] + cis_t1.shape[1]))
+
+    # Add CIS contribution
+    nocc = cis_t1.shape[0]
+    dm[:nocc,:nocc] += dm_oo * 2
+    dm[nocc:,nocc:] += dm_vv * 2
+
+    # Transform density matrix to AO basis
+    mo = mf.mo_coeff
+    dm = np.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
+    return dm
+
+def gs_denisty_matrix_dom(td):
+    '''
+    Calculate the GS density matrix in AO basis
+    '''
+    # Create density matrix in mo_basis
+    mf = td._scf
+    dm = np.diag(mf.mo_occ)
+
+    # Transform density matrix to AO basis
+    mo = mf.mo_coeff
+    dm = np.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
+    return dm
+
+
 
 # def xs2xs_denisty_matrix_dom2(tdhf, state_id1, state_id2):
 #     '''
@@ -269,7 +310,6 @@ def excitation_denisty_matrix(tdhf, mf, state_id1, state_id2):
     '''
     cis_t1 = tdhf.xy[state_id1][0]
     cis_t2 = tdhf.xy[state_id2][0]
-        
     dm_oo = np.einsum('ia,ka->ik', cis_t1.conj(), cis_t2)
     dm_vv = np.einsum('ia,ic->ac', cis_t1, cis_t2.conj())
     
@@ -284,6 +324,31 @@ def excitation_denisty_matrix(tdhf, mf, state_id1, state_id2):
     
     # Transform density matrices to AO basis
     mo = mf.mo_coeff
+    dm_hole = np.einsum('pi,ij,qj->pq', mo, dm_hole, mo.conj())
+    dm_part = np.einsum('pi,ij,qj->pq', mo, dm_part, mo.conj())
+    
+    return np.array([dm_hole, dm_part])
+
+def excitation_denisty_matrix_pickle(cis_t1, cis_t2, mo, state_id1, state_id2):
+    '''
+    Excitation Density Matrix from Hsu 2008
+    '''
+    # cis_t1 = tdhf.xy[state_id1][0]
+    # cis_t2 = tdhf.xy[state_id2][0]
+    dm_oo = np.einsum('ia,ka->ik', cis_t1.conj(), cis_t2)
+    dm_vv = np.einsum('ia,ic->ac', cis_t1, cis_t2.conj())
+    
+    # Create density matrix in mo_basis
+    dm_hole = np.diag(np.zeros(cis_t1.shape[0] + cis_t1.shape[1]))
+    dm_part = np.diag(np.zeros(cis_t1.shape[0] + cis_t1.shape[1]))
+    
+    nocc = cis_t1.shape[0]    
+    # Add CIS contribution for hole and particle density (detachment)
+    dm_hole[:nocc,:nocc] += dm_oo * 2
+    dm_part[nocc:,nocc:] += dm_vv * 2
+    
+    # Transform density matrices to AO basis
+    # mo = mf.mo_coeff
     dm_hole = np.einsum('pi,ij,qj->pq', mo, dm_hole, mo.conj())
     dm_part = np.einsum('pi,ij,qj->pq', mo, dm_part, mo.conj())
     
