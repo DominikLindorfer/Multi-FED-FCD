@@ -7,7 +7,7 @@ Created on Tue Jan 28 12:47:14 2020
 
 Implementation of FED-Couplings from Hsu J. Phys. Chem. C (2008)
 
-This file contains function definitions used in the main-part
+This file contains function definitions used in the main-part 
 """
 import pyscf
 import pyscf.dft
