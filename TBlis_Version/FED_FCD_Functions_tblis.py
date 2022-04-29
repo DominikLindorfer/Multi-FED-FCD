@@ -214,6 +214,44 @@ def xs2xs_denisty_matrix_dom(td, state_id1, state_id2):
     dm = einsum('pi,ij,qj->pq', mo, dm, mo.conj())
     return dm
 
+def xs2xs_density_matrix_dom_noGS(td, state_id1, state_id2):
+    '''
+    Taking the TDA amplitudes as the CIS coefficients, calculate the XS->XS density
+    matrix (in AO basis) of the excited states
+    '''
+    cis_t1 = td.xy[state_id1][0]
+    cis_t2 = td.xy[state_id2][0]
+    
+    dm_oo =-einsum('ia,ka->ik', cis_t1.conj(), cis_t2)
+    dm_vv = einsum('ia,ic->ac', cis_t1, cis_t2.conj())
+    
+    # Create density matrix in mo_basis
+    mf = td._scf
+    dm = np.diag(np.zeros(cis_t1.shape[0] + cis_t1.shape[1]))
+
+    # Add CIS contribution
+    nocc = cis_t1.shape[0]
+    dm[:nocc,:nocc] += dm_oo * 2
+    dm[nocc:,nocc:] += dm_vv * 2
+
+    # Transform density matrix to AO basis
+    mo = mf.mo_coeff
+    dm = np.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
+    return dm
+
+def gs_denisty_matrix_dom(td):
+    '''
+    Calculate the GS density matrix in AO basis
+    '''
+    # Create density matrix in mo_basis
+    mf = td._scf
+    dm = np.diag(mf.mo_occ)
+
+    # Transform density matrix to AO basis
+    mo = mf.mo_coeff
+    dm = einsum('pi,ij,qj->pq', mo, dm, mo.conj())
+    return dm
+
 # def xs2xs_denisty_matrix_dom2(tdhf, state_id1, state_id2):
 #     '''
 #     Taking the TDA amplitudes as the CIS coefficients, calculate the XS->XS density
